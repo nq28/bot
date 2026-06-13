@@ -1,0 +1,63 @@
+{
+  "name": "minecraft-afk-bot",
+  "version": "1.0.0",
+  "description": "Minecraft Auto-Join & Anti-AFK Bot with Web Dashboard",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "electron": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:linux-pkg": "pkg cli.js --target node18-linux-x64 --output dist/minecraft-bot-linux --compress GZip",
+    "build:win-pkg": "pkg cli.js --target node18-win-x64 --output dist/minecraft-bot-cli.exe --compress GZip",
+    "build:all": "npm run build:win && npm run build:linux-pkg && npm run build:win-pkg",
+    "pack:linux": "node scripts/pack-linux.js"
+  },
+  "build": {
+    "appId": "com.minecraftafkbot.app",
+    "productName": "Minecraft AFK Bot",
+    "copyright": "Copyright © 2025",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron-main.js",
+      "server.js",
+      "public/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Minecraft AFK Bot",
+      "installerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "assets/icon.png",
+      "category": "Game"
+    }
+  },
+  "pkg": {
+    "assets": ["node_modules/**/*"],
+    "targets": ["node18-linux-x64", "node18-win-x64"]
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mineflayer": "^4.20.1",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "pkg": "^5.8.1"
+  }
+}
