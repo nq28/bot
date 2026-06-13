@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎮 Minecraft AFK Bot Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2234;
+      --border: rgba(255,255,255,0.06);
+      --accent: #00d4ff;
+      --accent2: #7c3aed;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --glow: 0 0 20px rgba(0,212,255,0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background pattern */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,212,255,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(124,58,237,0.05) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app { position: relative; z-index: 1; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 28px;
+      background: rgba(17,24,39,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+      font-weight: 800; font-size: 20px; letter-spacing: -0.5px;
+    }
+
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 16px rgba(0,212,255,0.3);
+    }
+
+    .logo span { color: var(--accent); }
+
+    .header-status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      transition: background 0.3s;
+    }
+
+    .status-dot.online  { background: var(--green);  box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+    .status-dot.offline { background: var(--red); }
+    .status-dot.connecting { background: var(--yellow); animation: blink 0.8s infinite; }
+
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.6;} }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+    /* ── Main Layout ── */
+    main {
+      max-width: 1280px; margin: 0 auto;
+      padding: 28px 20px;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 20px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 12px; font-weight: 600; letter-spacing: 0.8px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .card-title::before {
+      content: '';
+      width: 3px; height: 14px;
+      background: linear-gradient(to bottom, var(--accent), var(--accent2));
+      border-radius: 2px;
+    }
+
+    /* ── Form ── */
+    .field { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 10px 14px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+    }
+
+    .row { display: flex; gap: 10px; }
+    .row .field { flex: 1; }
+
+    /* Checkboxes */
+    .check-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+
+    .check-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; cursor: pointer;
+      transition: border-color 0.2s;
+      font-size: 13px;
+    }
+
+    .check-item:hover { border-color: rgba(0,212,255,0.3); }
+    .check-item input { display: none; }
+
+    .check-box {
+      width: 16px; height: 16px; border-radius: 4px;
+      border: 2px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .check-item input:checked + .check-box {
+      background: var(--accent); border-color: var(--accent);
+    }
+
+    .check-item input:checked + .check-box::after {
+      content: '✓'; color: var(--bg); font-size: 10px; font-weight: 700;
+    }
+
+    /* Toggle switch */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 12px;
+    }
+
+    .toggle-label { font-size: 13px; font-weight: 500; }
+    .toggle-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .switch {
+      width: 44px; height: 24px; position: relative;
+    }
+
+    .switch input { display: none; }
+
+    .slider {
+      position: absolute; inset: 0;
+      background: var(--border); border-radius: 12px;
+      cursor: pointer; transition: background 0.25s;
+    }
+
+    .slider::after {
+      content: ''; position: absolute;
+      width: 18px; height: 18px;
+      top: 3px; left: 3px;
+      background: white; border-radius: 50%;
+      transition: transform 0.25s;
+    }
+
+    .switch input:checked + .slider { background: var(--accent); }
+    .switch input:checked + .slider::after { transform: translateX(20px); }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 10px 20px; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #0099bb);
+      color: #000; width: 100%; justify-content: center;
+      box-shadow: 0 4px 15px rgba(0,212,255,0.3);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,212,255,0.4); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--red), #cc2222);
+      color: white; width: 100%; justify-content: center;
+      box-shadow: 0 4px 15px rgba(239,68,68,0.3);
+    }
+    .btn-danger:hover { transform: translateY(-1px); }
+
+    .btn-sm {
+      padding: 7px 14px; font-size: 12px;
+    }
+
+    .btn-ghost {
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-row { display: flex; gap: 10px; }
+    .btn-row .btn { flex: 1; }
+
+    /* ── Stats Grid ── */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 16px;
+      transition: border-color 0.3s;
+    }
+
+    .stat-card:hover { border-color: rgba(0,212,255,0.2); }
+
+    .stat-label {
+      font-size: 11px; font-weight: 500; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 22px; font-weight: 700; line-height: 1;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* Progress bars */
+    .progress-bar {
+      height: 6px; background: var(--border); border-radius: 3px; margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 3px; transition: width 0.5s ease;
+    }
+
+    .health-bar .progress-fill { background: linear-gradient(to right, #ef4444, #f97316); }
+    .food-bar .progress-fill { background: linear-gradient(to right, #f59e0b, #84cc16); }
+
+    /* Position display */
+    .pos-display {
+      font-family: 'JetBrains Mono', monospace; font-size: 13px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 14px;
+      display: flex; gap: 16px; flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .pos-axis { display: flex; flex-direction: column; }
+    .pos-key { font-size: 10px; color: var(--muted); }
+    .pos-val { font-size: 15px; font-weight: 600; }
+    .pos-val.x { color: #ef4444; }
+    .pos-val.y { color: #22c55e; }
+    .pos-val.z { color: #3b82f6; }
+
+    /* ── Log Console ── */
+    .log-console {
+      background: #07090f; border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px;
+      height: 320px; overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .log-console::-webkit-scrollbar { width: 5px; }
+    .log-console::-webkit-scrollbar-track { background: transparent; }
+    .log-console::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .log-entry { display: flex; gap: 10px; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+    .log-time { color: var(--muted); flex-shrink: 0; }
+    .log-msg.info   { color: #94a3b8; }
+    .log-msg.success{ color: #22c55e; }
+    .log-msg.error  { color: #ef4444; }
+    .log-msg.warn   { color: #f59e0b; }
+    .log-msg.afk    { color: #a78bfa; }
+    .log-msg.chat   { color: #60a5fa; }
+    .log-msg.server { color: #34d399; }
+
+    /* ── Chat ── */
+    .chat-row {
+      display: flex; gap: 8px; margin-top: 12px;
+    }
+
+    .chat-row input {
+      flex: 1; padding: 10px 14px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 14px;
+      outline: none;
+    }
+
+    .chat-row input:focus { border-color: var(--accent); }
+
+    /* ── Right column ── */
+    .right-col { display: flex; flex-direction: column; gap: 20px; }
+
+    /* ── Reconnect counter badge ── */
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 2px 8px; border-radius: 100px;
+      font-size: 11px; font-weight: 700;
+      background: rgba(0,212,255,0.1); color: var(--accent);
+      border: 1px solid rgba(0,212,255,0.2);
+    }
+
+    /* Uptime */
+    .uptime-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px; font-weight: 700; text-align: center;
+      color: var(--accent); margin: 8px 0;
+      text-shadow: 0 0 20px rgba(0,212,255,0.3);
+    }
+
+    /* Notification toast */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 12px 18px; border-radius: 12px;
+      font-size: 13px; font-weight: 500;
+      display: none; z-index: 999;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn { from { transform: translateX(20px); opacity:0; } to { transform: none; opacity:1; } }
+
+    .toast-success { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: #22c55e; }
+    .toast-error   { background: rgba(239,68,68,0.15);  border: 1px solid rgba(239,68,68,0.3);  color: #ef4444; }
+    .toast-info    { background: rgba(0,212,255,0.1);   border: 1px solid rgba(0,212,255,0.2);  color: var(--accent); }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⛏️</div>
+      Minecraft <span>AFK Bot</span>
+    </div>
+    <div class="header-status" id="headerStatus">
+      <div class="status-dot offline" id="statusDot"></div>
+      <span id="statusText">Offline</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── Left: Config Panel ── -->
+    <div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-title">Cấu hình Server</div>
+
+        <div class="field">
+          <label>🌐 Địa chỉ Server (Host)</label>
+          <input type="text" id="cfgHost" value="localhost" placeholder="play.server.vn" />
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>🔌 Port</label>
+            <input type="number" id="cfgPort" value="25565" min="1" max="65535" />
+          </div>
+          <div class="field">
+            <label>🏷️ Phiên bản</label>
+            <select id="cfgVersion">
+              <optgroup label="─── 1.21.x ───">
+                <option value="1.21.4">1.21.4</option>
+                <option value="1.21.3">1.21.3</option>
+                <option value="1.21.2">1.21.2</option>
+                <option value="1.21.1">1.21.1</option>
+                <option value="1.21">1.21</option>
+              </optgroup>
+              <optgroup label="─── 1.20.x ───">
+                <option value="1.20.6">1.20.6</option>
+                <option value="1.20.5">1.20.5</option>
+                <option value="1.20.4">1.20.4</option>
+                <option value="1.20.3">1.20.3</option>
+                <option value="1.20.2">1.20.2</option>
+                <option value="1.20.1" selected>1.20.1</option>
+                <option value="1.20">1.20</option>
+              </optgroup>
+              <optgroup label="─── 1.19.x ───">
+                <option value="1.19.4">1.19.4</option>
+                <option value="1.19.3">1.19.3</option>
+                <option value="1.19.2">1.19.2</option>
+                <option value="1.19.1">1.19.1</option>
+                <option value="1.19">1.19</option>
+              </optgroup>
+              <optgroup label="─── 1.18.x ───">
+                <option value="1.18.2">1.18.2</option>
+                <option value="1.18.1">1.18.1</option>
+                <option value="1.18">1.18</option>
+              </optgroup>
+              <optgroup label="─── 1.17.x ───">
+                <option value="1.17.1">1.17.1</option>
+                <option value="1.17">1.17</option>
+              </optgroup>
+              <optgroup label="─── 1.16.x ───">
+                <option value="1.16.5">1.16.5</option>
+                <option value="1.16.4">1.16.4</option>
+                <option value="1.16.3">1.16.3</option>
+                <option value="1.16.2">1.16.2</option>
+                <option value="1.16.1">1.16.1</option>
+              </optgroup>
+              <optgroup label="─── 1.15.x ───">
+                <option value="1.15.2">1.15.2</option>
+                <option value="1.15.1">1.15.1</option>
+                <option value="1.15">1.15</option>
+              </optgroup>
+              <optgroup label="─── 1.14.x ───">
+                <option value="1.14.4">1.14.4</option>
+                <option value="1.14.3">1.14.3</option>
+                <option value="1.14.2">1.14.2</option>
+                <option value="1.14.1">1.14.1</option>
+                <option value="1.14">1.14</option>
+              </optgroup>
+              <optgroup label="─── 1.13.x ───">
+                <option value="1.13.2">1.13.2</option>
+                <option value="1.13.1">1.13.1</option>
+                <option value="1.13">1.13</option>
+              </optgroup>
+              <optgroup label="─── 1.12.x ───">
+                <option value="1.12.2">1.12.2</option>
+                <option value="1.12.1">1.12.1</option>
+                <option value="1.12">1.12</option>
+              </optgroup>
+              <optgroup label="─── 1.11.x ───">
+                <option value="1.11.2">1.11.2</option>
+                <option value="1.11">1.11</option>
+              </optgroup>
+              <optgroup label="─── 1.10.x ───">
+                <option value="1.10.2">1.10.2</option>
+              </optgroup>
+              <optgroup label="─── 1.9.x ───">
+                <option value="1.9.4">1.9.4</option>
+                <option value="1.9.2">1.9.2</option>
+                <option value="1.9">1.9</option>
+              </optgroup>
+              <optgroup label="─── 1.8.x ───">
+                <option value="1.8.9">1.8.9</option>
+                <option value="1.8.8">1.8.8</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>👤 Tên Bot (Username)</label>
+          <input type="text" id="cfgUsername" value="AFKBot" placeholder="Tên hiển thị trong game" />
+        </div>
+
+        <div class="field">
+          <label>⏱️ Tự kết nối lại sau (giây)</label>
+          <input type="number" id="cfgReconnect" value="5" min="1" max="300" />
+        </div>
+
+        <div class="btn-row" style="margin-top:6px">
+          <button class="btn btn-primary" id="btnStart" onclick="startBot()">▶ Khởi Động Bot</button>
+          <button class="btn btn-danger" id="btnStop" onclick="stopBot()" style="display:none">⏹ Dừng Bot</button>
+        </div>
+      </div>
+
+      <!-- Anti-AFK Config -->
+      <div class="card">
+        <div class="card-title">Anti-AFK</div>
+
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">🤖 Bật Anti-AFK</div>
+            <div class="toggle-sub">Tự động hành động để không bị kick</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="cfgAntiAfk" checked onchange="updateConfig()" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">Chọn hành động Anti-AFK:</div>
+        <div class="check-grid">
+          <label class="check-item">
+            <input type="checkbox" id="afkWalk" checked onchange="updateConfig()" />
+            <span class="check-box"></span>
+            🚶 Di chuyển
+          </label>
+          <label class="check-item">
+            <input type="checkbox" id="afkJump" checked onchange="updateConfig()" />
+            <span class="check-box"></span>
+            ⬆️ Nhảy
+          </label>
+          <label class="check-item">
+            <input type="checkbox" id="afkRotate" checked onchange="updateConfig()" />
+            <span class="check-box"></span>
+            👀 Xoay đầu
+          </label>
+          <label class="check-item">
+            <input type="checkbox" id="afkSneak" checked onchange="updateConfig()" />
+            <span class="check-box"></span>
+            🦆 Cúi người
+          </label>
+          <label class="check-item">
+            <input type="checkbox" id="afkSwing" onchange="updateConfig()" />
+            <span class="check-box"></span>
+            👊 Vung tay
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right: Stats + Logs ── -->
+    <div class="right-col">
+
+      <!-- Stats -->
+      <div class="card">
+        <div class="card-title">Thống Kê Thời Gian Thực</div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">❤️ Máu</div>
+            <div class="stat-value" id="statHealth">0<small style="font-size:14px;color:var(--muted)">/20</small></div>
+            <div class="progress-bar health-bar"><div class="progress-fill" id="healthBar" style="width:0%"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">🍖 Thức Ăn</div>
+            <div class="stat-value" id="statFood">0<small style="font-size:14px;color:var(--muted)">/20</small></div>
+            <div class="progress-bar food-bar"><div class="progress-fill" id="foodBar" style="width:0%"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">📶 Ping</div>
+            <div class="stat-value" id="statPing" style="color:var(--green)">—<small style="font-size:14px;color:var(--muted)"> ms</small></div>
+            <div class="stat-sub" id="pingQuality">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">🔄 Kết nối lại</div>
+            <div class="stat-value" id="statReconnects">0</div>
+            <div class="stat-sub">lần kể từ khi bắt đầu</div>
+          </div>
+        </div>
+
+        <!-- Position -->
+        <div style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px">📍 Tọa Độ</div>
+        <div class="pos-display">
+          <div class="pos-axis">
+            <span class="pos-key">X</span>
+            <span class="pos-val x" id="posX">—</span>
+          </div>
+          <div class="pos-axis">
+            <span class="pos-key">Y</span>
+            <span class="pos-val y" id="posY">—</span>
+          </div>
+          <div class="pos-axis">
+            <span class="pos-key">Z</span>
+            <span class="pos-val z" id="posZ">—</span>
+          </div>
+          <div style="flex:1; display:flex; align-items:center; justify-content:flex-end;">
+            <div style="font-size:11px;color:var(--muted);text-align:right">
+              Uptime<br>
+              <span id="uptimeDisplay" style="font-family:'JetBrains Mono';font-size:14px;color:var(--accent)">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log Console -->
+      <div class="card" style="flex:1">
+        <div class="card-title" style="justify-content:space-between">
+          <span>📋 Console Log</span>
+          <button class="btn btn-ghost btn-sm" onclick="clearLogs()">🗑 Xóa</button>
+        </div>
+        <div class="log-console" id="logConsole"></div>
+
+        <!-- Chat -->
+        <div class="chat-row">
+          <input type="text" id="chatInput" placeholder="💬 Gửi tin nhắn vào game..." onkeydown="if(event.key==='Enter')sendChat()" />
+          <button class="btn btn-ghost btn-sm" onclick="sendChat()">Gửi</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+  const socket = io();
+  let currentStatus = 'offline';
+
+  // ── Socket Events ──
+  socket.on('statusChange', (status) => {
+    currentStatus = status;
+    updateStatusUI(status);
+  });
+
+  socket.on('stats', (s) => {
+    if (s.status === 'online') {
+      document.getElementById('statHealth').innerHTML = `${s.health}<small style="font-size:14px;color:var(--muted)">/20</small>`;
+      document.getElementById('statFood').innerHTML = `${s.food}<small style="font-size:14px;color:var(--muted)">/20</small>`;
+      document.getElementById('healthBar').style.width = (s.health / 20 * 100) + '%';
+      document.getElementById('foodBar').style.width = (s.food / 20 * 100) + '%';
+
+      const ping = s.ping || 0;
+      document.getElementById('statPing').innerHTML = `${ping}<small style="font-size:14px;color:var(--muted)"> ms</small>`;
+      document.getElementById('pingQuality').textContent = ping < 50 ? '🟢 Tốt' : ping < 100 ? '🟡 Bình thường' : '🔴 Chậm';
+
+      document.getElementById('posX').textContent = s.position?.x ?? '—';
+      document.getElementById('posY').textContent = s.position?.y ?? '—';
+      document.getElementById('posZ').textContent = s.position?.z ?? '—';
+      document.getElementById('uptimeDisplay').textContent = formatUptime(s.uptime || 0);
+    }
+    document.getElementById('statReconnects').textContent = s.totalReconnects || 0;
+  });
+
+  socket.on('log', (entry) => appendLog(entry));
+  socket.on('logs', (logs) => {
+    document.getElementById('logConsole').innerHTML = '';
+    [...logs].reverse().forEach(appendLog);
+  });
+
+  // ── Status UI ──
+  function updateStatusUI(status) {
+    const dot = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+
+    dot.className = 'status-dot ' + status;
+    const labels = { online: '🟢 Online', offline: '🔴 Offline', connecting: '🟡 Đang kết nối...' };
+    text.textContent = labels[status] || status;
+
+    if (status === 'online') {
+      btnStart.style.display = 'none';
+      btnStop.style.display = 'flex';
+    } else if (status === 'offline') {
+      btnStart.style.display = 'flex';
+      btnStop.style.display = 'none';
+      document.getElementById('posX').textContent = '—';
+      document.getElementById('posY').textContent = '—';
+      document.getElementById('posZ').textContent = '—';
+      document.getElementById('uptimeDisplay').textContent = '—';
+    } else {
+      btnStart.style.display = 'none';
+      btnStop.style.display = 'flex';
+    }
+  }
+
+  // ── Bot Controls ──
+  async function startBot() {
+    const body = {
+      host: document.getElementById('cfgHost').value.trim(),
+      port: parseInt(document.getElementById('cfgPort').value),
+      username: document.getElementById('cfgUsername').value.trim(),
+      version: document.getElementById('cfgVersion').value,
+      reconnectDelay: parseInt(document.getElementById('cfgReconnect').value),
+      reconnect: true,
+      antiAfk: document.getElementById('cfgAntiAfk').checked,
+      afkActions: {
+        walk: document.getElementById('afkWalk').checked,
+        jump: document.getElementById('afkJump').checked,
+        rotate: document.getElementById('afkRotate').checked,
+        sneak: document.getElementById('afkSneak').checked,
+        swing: document.getElementById('afkSwing').checked,
+      }
+    };
+
+    if (!body.host) { showToast('Nhập địa chỉ server!', 'error'); return; }
+    if (!body.username) { showToast('Nhập tên bot!', 'error'); return; }
+
+    const res = await fetch('/api/start', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    showToast(data.message, data.ok ? 'success' : 'error');
+  }
+
+  async function stopBot() {
+    const res = await fetch('/api/stop', { method: 'POST' });
+    const data = await res.json();
+    showToast(data.message, 'info');
+  }
+
+  async function updateConfig() {
+    const body = {
+      antiAfk: document.getElementById('cfgAntiAfk').checked,
+      afkActions: {
+        walk: document.getElementById('afkWalk').checked,
+        jump: document.getElementById('afkJump').checked,
+        rotate: document.getElementById('afkRotate').checked,
+        sneak: document.getElementById('afkSneak').checked,
+        swing: document.getElementById('afkSwing').checked,
+      }
+    };
+    await fetch('/api/config', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+  }
+
+  async function sendChat() {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    if (!message) return;
+    const res = await fetch('/api/chat', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ message })
+    });
+    const data = await res.json();
+    if (data.ok) { input.value = ''; showToast('Đã gửi: ' + message, 'success'); }
+    else showToast(data.message, 'error');
+  }
+
+  // ── Logs ──
+  function appendLog(entry) {
+    const console_ = document.getElementById('logConsole');
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `<span class="log-time">${entry.timestamp}</span><span class="log-msg ${entry.type}">${escapeHtml(entry.msg)}</span>`;
+    console_.prepend(div);
+    // Limit displayed logs
+    while (console_.children.length > 150) console_.removeChild(console_.lastChild);
+  }
+
+  function clearLogs() {
+    document.getElementById('logConsole').innerHTML = '';
+    showToast('Console đã được xóa', 'info');
+  }
+
+  // ── Helpers ──
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function formatUptime(s) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  }
+
+  let toastTimer;
+  function showToast(msg, type = 'info') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast-${type}`;
+    t.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  // Load saved config from server on start
+  fetch('/api/config').then(r => r.json()).then(cfg => {
+    document.getElementById('cfgHost').value = cfg.host || 'localhost';
+    document.getElementById('cfgPort').value = cfg.port || 25565;
+    document.getElementById('cfgUsername').value = cfg.username || 'AFKBot';
+    document.getElementById('cfgReconnect').value = cfg.reconnectDelay || 5;
+    document.getElementById('cfgAntiAfk').checked = cfg.antiAfk !== false;
+    if (cfg.afkActions) {
+      document.getElementById('afkWalk').checked = cfg.afkActions.walk !== false;
+      document.getElementById('afkJump').checked = cfg.afkActions.jump !== false;
+      document.getElementById('afkRotate').checked = cfg.afkActions.rotate !== false;
+      document.getElementById('afkSneak').checked = cfg.afkActions.sneak !== false;
+      document.getElementById('afkSwing').checked = cfg.afkActions.swing === true;
+    }
+  });
+</script>
+</body>
+</html>
