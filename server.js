@@ -15,6 +15,7 @@ app.use(express.json());
 let bot = null;
 let reconnectTimer = null;
 let afkTimer = null;
+let chatTimer = null; // Thêm timer cho Auto Chat
 let statInterval = null;
 let isConnecting = false;
 
@@ -32,7 +33,7 @@ let config = {
     rotate: true,
     sneak: true,
     swing: false,
-    chat: false,
+    chat: false, // Dành cho Auto Chat
   },
   chatMessage: 'AFK Bot đang hoạt động!',
   chatInterval: 60,
@@ -50,6 +51,19 @@ let stats = {
   logs: [],
 };
 
+// ─── Hàm Cập Nhật Config An Toàn ──────────────────────────────────────────────
+// Khắc phục lỗi Object.assign làm mất dữ liệu của object con (afkActions)
+function updateConfig(newConfig) {
+  if (!newConfig) return;
+  for (const key in newConfig) {
+    if (key === 'afkActions' && typeof newConfig[key] === 'object') {
+      config.afkActions = { ...config.afkActions, ...newConfig.afkActions };
+    } else {
+      config[key] = newConfig[key];
+    }
+  }
+}
+
 // ─── Logging ──────────────────────────────────────────────────────────────────
 function log(msg, type = 'info') {
   const timestamp = new Date().toLocaleTimeString('vi-VN');
@@ -60,12 +74,11 @@ function log(msg, type = 'info') {
   console.log(`[${timestamp}] [${type.toUpperCase()}] ${msg}`);
 }
 
-// ─── Anti-AFK Logic ───────────────────────────────────────────────────────────
+// ─── Anti-AFK & Auto Chat Logic ───────────────────────────────────────────────
 const afkActions = [
-  // Walk forward/back/left/right randomly
+  // Walk
   () => {
-    if (!config.antiAfk || !config.afkActions.walk) return;
-    if (!bot || stats.status !== 'online') return;
+    if (!config.antiAfk || !config.afkActions.walk || !bot) return;
     const dirs = ['forward', 'back', 'left', 'right'];
     const dir = dirs[Math.floor(Math.random() * dirs.length)];
     bot.setControlState(dir, true);
@@ -74,33 +87,29 @@ const afkActions = [
   },
   // Jump
   () => {
-    if (!config.antiAfk || !config.afkActions.jump) return;
-    if (!bot || stats.status !== 'online') return;
+    if (!config.antiAfk || !config.afkActions.jump || !bot) return;
     bot.setControlState('jump', true);
     setTimeout(() => bot && bot.setControlState('jump', false), 200);
     log('⬆️ Anti-AFK: Nhảy', 'afk');
   },
   // Rotate head
   () => {
-    if (!config.antiAfk || !config.afkActions.rotate) return;
-    if (!bot || stats.status !== 'online') return;
+    if (!config.antiAfk || !config.afkActions.rotate || !bot) return;
     const yaw = (Math.random() - 0.5) * Math.PI * 2;
     const pitch = (Math.random() - 0.5) * Math.PI * 0.5;
     bot.look(yaw, pitch, false);
     log('👀 Anti-AFK: Xoay đầu', 'afk');
   },
-  // Sneak toggle
+  // Sneak
   () => {
-    if (!config.antiAfk || !config.afkActions.sneak) return;
-    if (!bot || stats.status !== 'online') return;
+    if (!config.antiAfk || !config.afkActions.sneak || !bot) return;
     bot.setControlState('sneak', true);
     setTimeout(() => bot && bot.setControlState('sneak', false), 500);
     log('🦆 Anti-AFK: Núp', 'afk');
   },
   // Swing arm
   () => {
-    if (!config.antiAfk || !config.afkActions.swing) return;
-    if (!bot || stats.status !== 'online') return;
+    if (!config.antiAfk || !config.afkActions.swing || !bot) return;
     bot.swingArm();
     log('👊 Anti-AFK: Vung tay', 'afk');
   },
@@ -113,10 +122,9 @@ function startAntiAfk() {
   const interval = 8000 + Math.random() * 7000; // 8–15s
   afkTimer = setTimeout(() => {
     if (bot && stats.status === 'online') {
-      const available = afkActions.filter((_, i) => {
-        const keys = ['walk', 'jump', 'rotate', 'sneak', 'swing'];
-        return config.afkActions[keys[i]];
-      });
+      const keys = ['walk', 'jump', 'rotate', 'sneak', 'swing'];
+      const available = afkActions.filter((_, i) => config.afkActions[keys[i]]);
+      
       if (available.length > 0) {
         available[Math.floor(Math.random() * available.length)]();
       }
@@ -127,6 +135,22 @@ function startAntiAfk() {
 
 function stopAntiAfk() {
   if (afkTimer) { clearTimeout(afkTimer); afkTimer = null; }
+}
+
+function startAutoChat() {
+  stopAutoChat();
+  if (!config.afkActions.chat || !config.chatMessage || config.chatInterval <= 0) return;
+  
+  chatTimer = setInterval(() => {
+    if (bot && stats.status === 'online') {
+      bot.chat(config.chatMessage);
+      log(`🤖 Auto-Chat: ${config.chatMessage}`, 'chat');
+    }
+  }, config.chatInterval * 1000);
+}
+
+function stopAutoChat() {
+  if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
 }
 
 // ─── Stat broadcaster ────────────────────────────────────────────────────────
@@ -144,7 +168,8 @@ function startStatBroadcast() {
             z: Math.round(bot.entity.position.z),
           };
         }
-        stats.ping = bot._client ? (bot._client.latency || 0) : 0;
+        // Fix lấy ping chuẩn từ mineflayer thay vì _client
+        stats.ping = bot.player ? (bot.player.ping || 0) : 0;
         stats.uptime = stats.connectedAt
           ? Math.floor((Date.now() - stats.connectedAt) / 1000)
           : 0;
@@ -173,7 +198,7 @@ function createBot() {
   try {
     bot = mineflayer.createBot({
       host: config.host,
-      port: parseInt(config.port),
+      port: parseInt(config.port) || 25565, // Fix fallback port
       username: config.username,
       version: config.version || false,
       auth: 'offline',
@@ -197,21 +222,22 @@ function createBot() {
 
   bot.on('spawn', () => {
     log(`🌍 Bot đã spawn vào thế giới`, 'success');
+    startAutoChat(); // Khởi động Auto Chat khi đã vào thế giới
   });
 
   bot.on('health', () => {
     stats.health = Math.round(bot.health || 0);
     stats.food = Math.round(bot.food || 0);
-    if (stats.health <= 0) {
-      log('💀 Bot đã chết! Đang chờ respawn...', 'warn');
-    }
   });
 
   bot.on('death', () => {
-    log('💀 Bot đã chết, đang respawn...', 'warn');
+    log('💀 Bot đã chết, đang chờ respawn...', 'warn');
+    // Mineflayer mặc định tự respawn, chỉ gọi thêm nếu bot bị kẹt
     setTimeout(() => {
-      if (bot) bot.respawn().catch(() => {});
-    }, 1000);
+      if (bot && !bot.isAlive) {
+        bot.respawn().catch(() => {});
+      }
+    }, 2000);
   });
 
   bot.on('kicked', (reason) => {
@@ -221,7 +247,7 @@ function createBot() {
     let reasonText = reason;
     try { reasonText = JSON.parse(reason)?.text || reason; } catch (_) {}
     log(`⚠️ Bot bị kick: ${reasonText}`, 'error');
-    stopAntiAfk();
+    cleanUpBotStates();
     scheduleReconnect();
   });
 
@@ -234,7 +260,7 @@ function createBot() {
     }
     stats.status = 'offline';
     io.emit('statusChange', 'offline');
-    stopAntiAfk();
+    cleanUpBotStates();
   });
 
   bot.on('end', (reason) => {
@@ -242,12 +268,12 @@ function createBot() {
     stats.status = 'offline';
     io.emit('statusChange', 'offline');
     log(`🔴 Kết nối bị đóng: ${reason || 'unknown'}`, 'warn');
-    stopAntiAfk();
+    cleanUpBotStates();
     scheduleReconnect();
   });
 
   bot.on('chat', (username, message) => {
-    if (username === bot.username) return;
+    if (!bot || username === bot.username) return;
     log(`💬 [Chat] ${username}: ${message}`, 'chat');
     io.emit('chat', { username, message });
   });
@@ -258,6 +284,11 @@ function createBot() {
       log(`📢 [Server] ${text}`, 'server');
     }
   });
+}
+
+function cleanUpBotStates() {
+  stopAntiAfk();
+  stopAutoChat();
 }
 
 function scheduleReconnect() {
@@ -272,10 +303,10 @@ function scheduleReconnect() {
 }
 
 function destroyBot() {
-  stopAntiAfk();
+  cleanUpBotStates();
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (bot) {
-    config.reconnect = false; // temporarily disable
+    config.reconnect = false;
     try { bot.quit(); } catch (_) {}
     bot = null;
   }
@@ -290,7 +321,7 @@ app.get('/api/config', (_, res) => res.json(config));
 app.get('/api/stats', (_, res) => res.json({ ...stats, logs: stats.logs.slice(0, 50) }));
 
 app.post('/api/start', (req, res) => {
-  if (req.body) Object.assign(config, req.body);
+  if (req.body) updateConfig(req.body); // Fix shallow merge
   config.reconnect = true;
   if (stats.status === 'online' || isConnecting) {
     return res.json({ ok: false, message: 'Bot đã đang chạy' });
@@ -306,7 +337,14 @@ app.post('/api/stop', (_, res) => {
 });
 
 app.post('/api/config', (req, res) => {
-  Object.assign(config, req.body);
+  updateConfig(req.body); // Fix shallow merge
+  
+  // Cập nhật timer Auto Chat ngay lập tức nếu config thay đổi
+  if (stats.status === 'online') {
+    startAntiAfk(); 
+    startAutoChat();
+  }
+  
   log('⚙️ Cấu hình đã được cập nhật', 'info');
   res.json({ ok: true });
 });
@@ -336,14 +374,11 @@ io.on('connection', (socket) => {
   socket.emit('logs', stats.logs.slice(0, 100));
 });
 
-// ─── Start Server ─────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`
-╔══════════════════════════════════════╗
-║   🎮 Minecraft AFK Bot Dashboard     ║
-║   PORT: ${PORT}
-╚══════════════════════════════════════╝
-`);
+// ─── Start Server ─────────────────────────────────────────────────────────────
+const PORT = 3000;
+server.listen(PORT, () => {
+  console.log(`\n╔══════════════════════════════════════╗`);
+  console.log(`║   🎮 Minecraft AFK Bot Dashboard     ║`);
+  console.log(`║   http://localhost:${PORT}              ║`);
+  console.log(`╚══════════════════════════════════════╝\n`);
 });
